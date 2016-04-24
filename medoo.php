@@ -190,7 +190,7 @@ class medoo
 
 	protected function column_quote($string)
 	{
-		return '"' . str_replace('.', '"."', preg_replace('/(^#|\(JSON\)\s*)/', '', $string)) . '"';
+		return '`' . str_replace('.', '`.`', preg_replace('/(^#|\(JSON\)\s*)/', '', $string)) . '`';
 	}
 
 	protected function column_push($columns)
@@ -209,14 +209,29 @@ class medoo
 
 		foreach ($columns as $key => $value)
 		{
-			preg_match('/([a-zA-Z0-9_\-\.]*)\s*\(([a-zA-Z0-9_\-]*)\)/i', $value, $match);
+			preg_match('/([a-zA-Z0-9_\-\.]*)\s*\[(.*?)\]/i', $value, $match);
 
-			if (isset($match[ 1 ], $match[ 2 ]))
+			if (isset($match[1], $match[ 2 ]))
 			{
-				array_push($stack, $this->column_quote( $match[ 1 ] ) . ' AS ' . $this->column_quote( $match[ 2 ] ));
-			}
-			else
-			{
+
+				$colname = substr($value, 0, strrpos($value, "]") + 1);
+				$colname = str_replace('[', '(', $colname);
+				$colname = str_replace(']', ')', $colname);
+
+				$colalias = false;
+				if (strpos($value, "(") !== false) {
+					$colalias = substr($value, strpos($value, "(") + 1, strrpos($value, ")") - strpos($value, "(")-1);
+				}
+
+				if($colalias)
+				{
+					array_push($stack, $colname . ' AS ' . $colalias);
+				}
+				else
+				{
+					array_push($stack, $colname);
+				}
+			} else {
 				array_push($stack, $this->column_quote( $value ));
 			}
 		}
@@ -542,7 +557,7 @@ class medoo
 
 	protected function select_context($table, $join, &$columns = null, $where = null, $column_fn = null)
 	{
-		$table = '"' . $this->prefix . $table . '"';
+		$table = '`' . $this->prefix . $table . '`';
 		$join_key = is_array($join) ? array_keys($join) : null;
 
 		if (
@@ -567,7 +582,7 @@ class medoo
 				{
 					if (is_string($relation))
 					{
-						$relation = 'USING ("' . $relation . '")';
+						$relation = 'USING (`' . $relation . '`)';
 					}
 
 					if (is_array($relation))
@@ -575,7 +590,7 @@ class medoo
 						// For ['column1', 'column2']
 						if (isset($relation[ 0 ]))
 						{
-							$relation = 'USING ("' . implode($relation, '", "') . '")';
+							$relation = 'USING (`' . implode($relation, '`, `') . '`)';
 						}
 						else
 						{
@@ -586,20 +601,20 @@ class medoo
 								$joins[] = $this->prefix . (
 									strpos($key, '.') > 0 ?
 										// For ['tableB.column' => 'column']
-										'"' . str_replace('.', '"."', $key) . '"' :
+										'`' . str_replace('.', '`.`', $key) . '`' :
 
 										// For ['column1' => 'column2']
-										$table . '."' . $key . '"'
+										$table . '.`' . $key . '`'
 								) .
 								' = ' .
-								'"' . (isset($match[ 5 ]) ? $match[ 5 ] : $match[ 3 ]) . '"."' . $value . '"';
+								'`' . (isset($match[ 5 ]) ? $match[ 5 ] : $match[ 3 ]) . '`.`' . $value . '`';
 							}
 
 							$relation = 'ON ' . implode($joins, ' AND ');
 						}
 					}
 
-					$table_join[] = $join_array[ $match[ 2 ] ] . ' JOIN "' . $this->prefix . $match[ 3 ] . '" ' . (isset($match[ 5 ]) ?  'AS "' . $match[ 5 ] . '" ' : '') . $relation;
+					$table_join[] = $join_array[ $match[ 2 ] ] . ' JOIN `' . $this->prefix . $match[ 3 ] . '` ' . (isset($match[ 5 ]) ?  'AS `' . $match[ 5 ] . '` ' : '') . $relation;
 				}
 			}
 
