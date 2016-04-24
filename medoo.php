@@ -245,7 +245,6 @@ class medoo
 				array_push($stack, $this->column_quote( $value ));
 			}
 		}
-		}
 
 		return implode($stack, ',');
 	}
