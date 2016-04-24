@@ -171,8 +171,8 @@ class medoo
 
 		if ($this->error()[2] != "") {
 			array_push($this->errors, $this->error()[2]);
-			$this->lastError = $this->error()[2];
 		}
+		$this->lastError = $this->error()[2];
 
 		return $result;
 	}
@@ -235,7 +235,7 @@ class medoo
 
 				if($colalias)
 				{
-					array_push($stack, $colname . ' AS ' . $colalias);
+					array_push($stack, $colname . ' AS ' . $this->quote($colalias));
 				}
 				else
 				{
@@ -275,7 +275,7 @@ class medoo
 
 	protected function fn_quote($column, $string)
 	{
-		return (strpos($column, '#') === 0 && preg_match('/^[A-Z0-9\_]*\([^)]*\)$/', $string)) ?
+		return (strpos($column, '#') === 0) ?
 
 		$string :
 
@@ -372,10 +372,6 @@ class medoo
 							if ($suffix === '_')
 							{
 								$item = substr_replace($item, '%', -1);
-							}
-							elseif ($suffix === '%')
-							{
-								$item = '%' . substr_replace($item, '', -1, 1);
 							}
 							elseif (preg_match('/^(?!%).+(?<!%)$/', $item))
 							{
@@ -568,6 +564,14 @@ class medoo
 	protected function select_context($table, $join, &$columns = null, $where = null, $column_fn = null)
 	{
 		$table = '`' . $this->prefix . $table . '`';
+		$tableAlias = $table;	
+
+		preg_match('/([a-zA-Z0-9_\-\.]*)\s*\((.*?)\)/i', $table, $talias);
+		if (isset($talias[1], $talias[2])) {
+			$table = '`' . $this->prefix . $talias[1] . '` AS `' . $talias[2] . '`';
+			$tableAlias = '`' . $talias[2] . '`';
+		}
+
 		$join_key = is_array($join) ? array_keys($join) : null;
 
 		if (
@@ -614,7 +618,7 @@ class medoo
 										'`' . str_replace('.', '`.`', $key) . '`' :
 
 										// For ['column1' => 'column2']
-										$table . '.`' . $key . '`'
+										$tableAlias . '.`' . $key . '`'
 								) .
 								' = ' .
 								'`' . (isset($match[ 5 ]) ? $match[ 5 ] : $match[ 3 ]) . '`.`' . $value . '`';
@@ -1010,6 +1014,14 @@ class medoo
 		}
 
 		return $output;
+	}
+	public function manual($sql) {
+		$query = $this->query($sql);
+		if ($this->lastError == "") {
+			return $query->fetchAll(PDO::FETCH_ASSOC);
+		} else {
+			return $this->lastError;
+		}
 	}
 }
 ?>
