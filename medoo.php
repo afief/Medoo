@@ -41,6 +41,9 @@ class medoo
 
 	protected $debug_mode = false;
 
+	public $errors = array();
+	public $lastError = "";
+
 	public function __construct($options = null)
 	{
 		try {
@@ -164,7 +167,14 @@ class medoo
 
 		array_push($this->logs, $query);
 
-		return $this->pdo->query($query);
+		$result = $this->pdo->query($query);
+
+		if ($this->error()[2] != "") {
+			array_push($this->errors, $this->error()[2]);
+			$this->lastError = $this->error()[2];
+		}
+
+		return $result;
 	}
 
 	public function exec($query)
