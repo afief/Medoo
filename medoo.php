@@ -137,7 +137,7 @@ class medoo
 				$commands[] = "SET NAMES '" . $this->charset . "'";
 			}
 
-			$this->pdo = new PDO(
+			$this->pdo = new \PDO(
 				$dsn,
 				$this->username,
 				$this->password,
@@ -149,8 +149,8 @@ class medoo
 				$this->pdo->exec($value);
 			}
 		}
-		catch (PDOException $e) {
-			throw new Exception($e->getMessage());
+		catch (\PDOException $e) {
+			throw new \Exception($e->getMessage());
 		}
 	}
 
@@ -171,8 +171,8 @@ class medoo
 
 		if ($this->error()[2] != "") {
 			array_push($this->errors, $this->error()[2]);
+			$this->lastError = $this->error()[2];
 		}
-		$this->lastError = $this->error()[2];
 
 		return $result;
 	}
@@ -190,7 +190,14 @@ class medoo
 
 		array_push($this->logs, $query);
 
-		return $this->pdo->exec($query);
+		$result = $this->pdo->exec($query);
+
+		if ($this->error()[2] != "") {
+			array_push($this->errors, $this->error()[2]);
+			$this->lastError = $this->error()[2];
+		}
+
+		return $result;
 	}
 
 	public function quote($string)
@@ -219,6 +226,15 @@ class medoo
 
 		foreach ($columns as $key => $value)
 		{
+			$colalias = '';
+			if (strpos($value, "(") !== false) {
+				$colalias = substr($value, strpos($value, "(") + 1, strrpos($value, ")") - strpos($value, "(") - 1);
+				if ($colalias) {
+					$colalias = ' AS ' . $this->quote($colalias);
+					$value = substr($value, 0, strrpos($value, '('));
+				}
+			}
+
 			preg_match('/([a-zA-Z0-9_\-\.]*)\s*\[(.*?)\]/i', $value, $match);
 
 			if (isset($match[1], $match[ 2 ]))
@@ -228,21 +244,9 @@ class medoo
 				$colname = str_replace('[', '(', $colname);
 				$colname = str_replace(']', ')', $colname);
 
-				$colalias = false;
-				if (strpos($value, "(") !== false) {
-					$colalias = substr($value, strpos($value, "(") + 1, strrpos($value, ")") - strpos($value, "(")-1);
-				}
-
-				if($colalias)
-				{
-					array_push($stack, $colname . ' AS ' . $this->quote($colalias));
-				}
-				else
-				{
-					array_push($stack, $colname);
-				}
+				array_push($stack, $colname . $colalias);
 			} else {
-				array_push($stack, $this->column_quote( $value ));
+				array_push($stack, $this->column_quote( $value ) . $colalias);
 			}
 		}
 
@@ -612,16 +616,28 @@ class medoo
 
 							foreach ($relation as $key => $value)
 							{
-								$joins[] = $this->prefix . (
-									strpos($key, '.') > 0 ?
-										// For ['tableB.column' => 'column']
-										'`' . str_replace('.', '`.`', $key) . '`' :
+								if (strpos($value, '=') !== false) {
+									$joins[] = $this->prefix . (
+										strpos($key, '.') > 0 ?
+											// For ['tableB.column' => 'column']
+											'`' . str_replace('.', '`.`', $key) . '`' :
 
-										// For ['column1' => 'column2']
-										$tableAlias . '.`' . $key . '`'
-								) .
-								' = ' .
-								'`' . (isset($match[ 5 ]) ? $match[ 5 ] : $match[ 3 ]) . '`.`' . $value . '`';
+											// For ['column1' => 'column2']
+											'`' . (isset($match[ 5 ]) ? $match[ 5 ] : $match[ 3 ]) . '`.`' . $key . '`'
+									) .
+									' = ' . $this->quote(substr($value, 1));
+								} else {
+									$joins[] = $this->prefix . (
+										strpos($key, '.') > 0 ?
+											// For ['tableB.column' => 'column']
+											'`' . str_replace('.', '`.`', $key) . '`' :
+
+											// For ['column1' => 'column2']
+											$tableAlias . '.`' . $key . '`'
+									) .
+									' = ' .
+									'`' . (isset($match[ 5 ]) ? $match[ 5 ] : $match[ 3 ]) . '`.`' . $value . '`';
+								}
 							}
 
 							$relation = 'ON ' . implode($joins, ' AND ');
@@ -703,7 +719,7 @@ class medoo
 		$query = $this->query($this->select_context($table, $join, $columns, $where));
 
 		return $query ? $query->fetchAll(
-			(is_string($columns) && $columns != '*') ? PDO::FETCH_COLUMN : PDO::FETCH_ASSOC
+			(is_string($columns) && $columns != '*') ? \PDO::FETCH_COLUMN : \PDO::FETCH_ASSOC
 			) : false;
 	}
 
@@ -860,7 +876,7 @@ class medoo
 
 		if ($query)
 		{
-			$data = $query->fetchAll(PDO::FETCH_ASSOC);
+			$data = $query->fetchAll(\PDO::FETCH_ASSOC);
 
 			if (isset($data[ 0 ]))
 			{
@@ -1010,7 +1026,7 @@ class medoo
 
 		foreach ($output as $key => $value)
 		{
-			$output[ $key ] = $this->pdo->getAttribute(constant('PDO::ATTR_' . $value));
+			$output[ $key ] = $this->pdo->getAttribute(constant('\PDO::ATTR_' . $value));
 		}
 
 		return $output;
@@ -1018,7 +1034,7 @@ class medoo
 	public function manual($sql) {
 		$query = $this->query($sql);
 		if ($this->lastError == "") {
-			return $query->fetchAll(PDO::FETCH_ASSOC);
+			return $query->fetchAll(\PDO::FETCH_ASSOC);
 		} else {
 			return $this->lastError;
 		}
